@@ -1,0 +1,39 @@
+# Node.js dependencies
+/node_modules/
+
+# npm log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build output
+/dist/
+/build/
+
+# Temporary files
+/.tmp/
+/.temp/
+
+# IDE/Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Coverage directory used by testing tools
+/coverage/
+
+# TypeScript
+*.tsbuildinfo
