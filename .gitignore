@@ -40,3 +40,7 @@ Thumbs.db
 
 # History file
 history.json
+
+# Cloned repository
+cloned-repo/
+temp-repo/

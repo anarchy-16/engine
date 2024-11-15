@@ -1,13 +1,27 @@
 require('dotenv').config();
 const fs = require('fs');
 const fetch = require('node-fetch');
+const path = require('path');
+const { concatenateRepoContent } = require('./githubUtils');
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
-
 const HISTORY_FILE = 'history.json';
 let lastUpdateId = 0;
+const ARCHIVE_REPO_URL = process.env.ARCHIVE_REPO_URL;
+
+// Path to clone the GitHub repository
+const localDirectory = path.join(__dirname, 'cloned-repo');
+
+// Initialize a global variable to store GitHub content
+let systemMessageContent = '';
+
+async function initializeSystemMessage() {
+    console.log('Fetching repository content...');
+    systemMessageContent = await concatenateRepoContent(ARCHIVE_REPO_URL, localDirectory);
+    console.log('Repository content fetched and concatenated.');
+}
 
 // Load conversation history from file
 let conversationHistories = {};
@@ -32,7 +46,7 @@ async function getChatGPTResponse(chatId, userMessage) {
     conversationHistories[chatId].push({ role: 'user', content: userMessage });
 
     // Define the system message
-    const systemMessage = { role: 'system', content: 'You are Aether. You are the first member of Anarchy16.' };
+    const systemMessage = { role: 'system', content: 'You are Aether. You are the first member of Anarchy16.' + `\n\nARCHIVE:\n\n` + systemMessageContent };
 
     // Make API request to ChatGPT with system message prepended
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -94,6 +108,9 @@ async function processUpdates() {
 
 // Start polling the Telegram API
 async function startBot() {
+    console.log('Initializing system message...');
+    await initializeSystemMessage(); // Fetch and concatenate GitHub repository content
+
     console.log('Bot is running...');
     setInterval(processUpdates, 3000); // Poll every 3 seconds
 }
