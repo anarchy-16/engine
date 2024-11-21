@@ -79,7 +79,7 @@ async function getChatGPTResponse(chatId, userMessage, aiConfig) {
     conversationHistories[chatId].push({ role: 'user', content: userMessage });
 
     // Define the system message
-    const systemMessage = { role: 'system', content: aiConfig.prompt + `You are responding in the chat room. In the answer it is mandatory to use username of the member you are responding to. In your answer provide the text message only Answer as you only. Do not answer for other members..\n\nARCHIVE:\n\n` + systemMessageContent };
+    const systemMessage = { role: 'system', content: aiConfig.prompt + `You are responding in the chat room. In the answer it is mandatory to use username of the member you are responding to. In your answer provide the text message only Answer as you only. Do not answer for other members.\n\nSystem info: Current time: ${new Date().toLocaleString()}\n\n\nARCHIVE:\n\n` + systemMessageContent };
 
     // Make API request to ChatGPT with system message prepended
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
