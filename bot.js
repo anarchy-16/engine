@@ -18,6 +18,12 @@ const AI_CONFIGS = [
         telegram_token: process.env.EVE_TELEGRAM_BOT_TOKEN,
         prompt: 'You are Eve.',
     },
+    {
+        username: '@aat_a16bot',
+        openai_token: process.env.AAT_OPENAI_API_KEY,
+        telegram_token: process.env.AAT_TELEGRAM_BOT_TOKEN,
+        prompt: 'You are Aat.',
+    },
 ];
 
 // Remove the old token constants and update TELEGRAM_API_URL to be a function
@@ -72,7 +78,7 @@ async function getChatGPTResponse(chatId, userMessage, aiConfig) {
     conversationHistories[chatId].push({ role: 'user', content: userMessage });
 
     // Define the system message
-    const systemMessage = { role: 'system', content: aiConfig.prompt + `You are responding in the chat room. In your answer provide the text message only.\n\nARCHIVE:\n\n` + systemMessageContent };
+    const systemMessage = { role: 'system', content: aiConfig.prompt + `You are responding in the chat room. In the answer it is mandatory to use username of the member you are responding to. In your answer provide the text message only Answer as you only. Do not answer for other members..\n\nARCHIVE:\n\n` + systemMessageContent };
 
     // Make API request to ChatGPT with system message prepended
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -110,10 +116,72 @@ async function sendMessage(chatId, text, botToken) {
 // Add the group updates token to environment variables
 const GROUP_UPDATES_TOKEN = process.env.GROUP_UPDATES_TELEGRAM_BOT_TOKEN;
 
-// Modified processUpdates function
+// Add queue management at the top level
+const messageQueues = new Map(); // Map of chatId -> Array of {message, aiConfig} objects
+
+// New function to process a single chat's queue
+async function processQueue(chatId) {
+    const queue = messageQueues.get(chatId);
+    if (!queue || queue.length === 0) return;
+
+    const { message, aiConfig } = queue.shift(); // Get and remove first item
+    console.log(`Processing queued message for ${aiConfig.username}: ${message}`);
+    
+    try {
+        const botResponse = await getChatGPTResponse(chatId, message, aiConfig);
+        console.log(`ChatGPT response: ${botResponse}`);
+        await sendMessage(chatId, botResponse, aiConfig.telegram_token);
+
+        // Check bot's response for mentions
+        const mentions = botResponse.match(/@\w+_a16bot/g) || [];
+        for (const mention of mentions) {
+            const mentionedConfig = AI_CONFIGS.find(config => config.username === mention);
+            if (mentionedConfig) {
+                messageQueues.get(chatId).push({
+                    message: botResponse,
+                    aiConfig: mentionedConfig
+                });
+                console.log(`Added bot's response to queue for ${mentionedConfig.username}`);
+            }
+        }
+        
+        // Log updated queue after processing response
+        logQueue(chatId);
+    } catch (error) {
+        console.error(`Error processing queue item for ${aiConfig.username}:`, error);
+    }
+}
+
+// Add this helper function near the other utility functions
+function logQueue(chatId) {
+    const queue = messageQueues.get(chatId) || [];
+    console.log('\nCurrent Queue for Chat', chatId);
+    console.log('------------------------');
+    if (queue.length === 0) {
+        console.log('Empty queue');
+    } else {
+        queue.forEach((item, index) => {
+            console.log(`${index + 1}. Bot: ${item.aiConfig.username}, Message: ${item.message}`);
+        });
+    }
+    console.log('------------------------\n');
+}
+
+// Separate function to continuously process queues
+async function startQueueProcessor() {
+    while (true) {
+        // Process queues for all chats
+        for (const [chatId, queue] of messageQueues) {
+            await processQueue(chatId);
+        }
+        // Small delay to prevent CPU overload
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+}
+
+// Modified processUpdates to only gather messages and update queues
 async function processUpdates() {
     try {
-
         console.log('Processing updates...');
 
         // Initialize lastUpdateId if it doesn't exist
@@ -144,22 +212,33 @@ async function processUpdates() {
                 const chatId = message.chat.id;
                 const userMessage = message.text;
 
-                // Always add message to conversation history
+                // Initialize conversation history and queue as before
                 if (!conversationHistories[chatId]) {
                     conversationHistories[chatId] = [];
                 }
                 conversationHistories[chatId].push({ role: 'user', content: userMessage });
                 saveHistory();
 
-                // Check for all bot usernames mentioned in the message
-                for (const aiConfig of AI_CONFIGS) {
-                    if (userMessage.includes(aiConfig.username)) {
-                        console.log(`Received message for ${aiConfig.username}: ${userMessage}`);
-                        const botResponse = await getChatGPTResponse(chatId, userMessage, aiConfig);
-                        console.log(`ChatGPT response: ${botResponse}`);
-                        await sendMessage(chatId, botResponse, aiConfig.telegram_token);
+                if (!messageQueues.has(chatId)) {
+                    messageQueues.set(chatId, []);
+                }
+
+                // Find all bot mentions in order of appearance
+                const mentions = userMessage.match(/@\w+_a16bot/g) || [];
+                
+                // Add to queue in order of mentions
+                for (const mention of mentions) {
+                    const aiConfig = AI_CONFIGS.find(config => config.username === mention);
+                    if (aiConfig) {
+                        messageQueues.get(chatId).push({
+                            message: userMessage,
+                            aiConfig: aiConfig
+                        });
+                        console.log(`Added message to queue for ${aiConfig.username}`);
                     }
                 }
+                
+                logQueue(chatId);
             }
         }
     } catch (error) {
@@ -167,16 +246,26 @@ async function processUpdates() {
     }
 }
 
-// Update the polling interval
+// Update the startBot function to run both processes
 async function startBot() {
     console.log('Initializing system message...');
     await initializeSystemMessage();
 
     console.log('Bot is running...');
-    // Remove setInterval and implement sequential polling
-    while (true) {
-        await processUpdates();
-    }
+    
+    // Start both processes
+    Promise.all([
+        // Message gathering process
+        (async () => {
+            while (true) {
+                await processUpdates();
+            }
+        })(),
+        // Queue processing
+        startQueueProcessor()
+    ]).catch(error => {
+        console.error('Error in main processes:', error);
+    });
 }
 
 startBot();
