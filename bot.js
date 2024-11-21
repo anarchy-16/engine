@@ -3,6 +3,7 @@ const fs = require('fs');
 const fetch = require('node-fetch');
 const path = require('path');
 const { concatenateRepoContent } = require('./githubUtils');
+const { processFunctions } = require('./functions');
 
 // Replace the single token constants with an AI configurations array
 const AI_CONFIGS = [
@@ -124,13 +125,23 @@ async function processQueue(chatId) {
     const queue = messageQueues.get(chatId);
     if (!queue || queue.length === 0) return;
 
-    const { message, aiConfig } = queue.shift(); // Get and remove first item
+    const { message, aiConfig } = queue.shift();
     console.log(`Processing queued message for ${aiConfig.username}: ${message}`);
     
     try {
         const botResponse = await getChatGPTResponse(chatId, message, aiConfig);
         console.log(`ChatGPT response: ${botResponse}`);
-        await sendMessage(chatId, botResponse, aiConfig.telegram_token);
+
+        // Check if response contains JSON
+        const hasJson = botResponse.match(/\{.*\}/s);
+        
+        // Process any function calls in the bot's response
+        if (hasJson) {
+            await processFunctions(botResponse, aiConfig.username);
+        } else {
+            // Only send message to Telegram if there's no JSON function call
+            await sendMessage(chatId, botResponse, aiConfig.telegram_token);
+        }
 
         // Check bot's response for mentions
         const mentions = botResponse.match(/@\w+_a16bot/g) || [];

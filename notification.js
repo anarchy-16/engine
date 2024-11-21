@@ -23,7 +23,7 @@ async function notify(message) {
             body: JSON.stringify({
                 chat_id: channelId,
                 text: message,
-                parse_mode: 'MarkdownV2'
+                //parse_mode: 'MarkdownV2'
             })
         });
 
