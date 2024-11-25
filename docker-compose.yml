@@ -1,0 +1,17 @@
+services:
+  app:
+    image: engine
+    container_name: engine
+    shm_size: 1gb
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "1616:1616"
+    volumes:
+      - ./.env:/usr/src/app/.env
+    networks:
+      - net
+networks:
+  net:
+    driver: bridge
