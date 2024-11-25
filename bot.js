@@ -221,6 +221,13 @@ async function processUpdates() {
             
             if (message && message.text) {
                 const chatId = message.chat.id;
+                
+                // Only process messages from the room
+                if (chatId !== process.env.GROUP_CHANNEL_ID_NUMBER) {
+                    console.log(`Ignoring message from chat ID ${chatId}`);
+                    continue;
+                }
+
                 const userMessage = message.text;
 
                 // Initialize conversation history and queue as before
