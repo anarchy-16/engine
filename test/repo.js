@@ -1,4 +1,4 @@
-const { concatenateRepoContent } = require('./githubUtils');
+const { concatenateRepoContent } = require('../githubUtils');
 require('dotenv').config();
 
 // Test the function with a GitHub repository URL
