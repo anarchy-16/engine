@@ -1,0 +1,25 @@
+name: update concept
+on:
+  push:
+    branches:
+      - concept
+    paths-ignore:
+      - '.github/workflows/*'
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Setup key
+      - run: set -eu
+      - run: mkdir "$HOME/.ssh"
+      - run: echo "${{ secrets.SERVER_KEY }}" > "$HOME/.ssh/key"
+      - run: chmod 600 "$HOME/.ssh/key"
+      # Restart Docker container
+      - run: |
+          ssh -i $HOME/.ssh/key -p 3333 -o StrictHostKeyChecking=no root@${{ secrets.SERVER_IP }} <<EOF
+            cd /home/engine
+            docker compose down
+            docker compose up -d --build
+          EOF
+      - run: echo "Deployed, container rebuilt"
